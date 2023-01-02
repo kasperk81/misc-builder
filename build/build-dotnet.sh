@@ -38,6 +38,9 @@ if [[ "${REVISION}" == "${LAST_REVISION}" ]]; then
 fi
 
 DIR=$(pwd)/dotnet/runtime
+DEST=/tmp/Core_Root
+
+rm -rf ${DEST}
 
 git clone --depth 1 -b ${BRANCH} ${URL} ${DIR}
 cd ${DIR}
@@ -45,34 +48,37 @@ cd ${DIR}
 commit="$(git rev-parse HEAD)"
 echo "HEAD is at: $commit"
 
-CORE_ROOT=artifacts/tests/coreclr/Linux.x64.Release/Tests/Core_Root
-
 # Build everything in Release mode
 ./build.sh Clr+Libs -c Release --ninja -ci -p:OfficialBuildId=$(date +%Y%m%d)-99
 
 # Build Checked JIT compilers (only Checked JITs are able to print codegen)
-./build.sh Clr.AllJits -c Checked --ninja
-cd src/tests
+./build.sh Clr.AllJits -c Checked --ninja -p:OfficialBuildId=$(date +%Y%m%d)-99
 
 # Generate CORE_ROOT for Release
-./build.sh Release generatelayoutonly
-cd ../..
+src/tests/build.sh Release generatelayoutonly -p:OfficialBuildId=$(date +%Y%m%d)-99
+
+cp -r artifacts/tests/coreclr/Linux.x64.Release/Tests/Core_Root ${DEST}
+
+# Build packs in Release mode
+./build.sh packs -c Release -p:OfficialBuildId=$(date +%Y%m%d)-99
+
+# Replace crossgen2 with published variant
+rm -rf ${DEST}/crossgen2
+cp -r artifacts/bin/coreclr/Linux.x64.Release/crossgen2/linux-x64/publish ${DEST}/crossgen2
 
 # Write version info for .NET 6 (it doesn't have crossgen2 --version)
-echo "${VERSION:1}+${commit}" > ${CORE_ROOT}/version.txt
+echo "${VERSION:1}+${commit}" > ${DEST}/version.txt
 
 # Copy Checked JITs to CORE_ROOT
-cp artifacts/bin/coreclr/Linux.x64.Checked/libclrjit*.so ${CORE_ROOT}
-cp artifacts/bin/coreclr/Linux.x64.Checked/libclrjit*.so ${CORE_ROOT}/crossgen2
+cp artifacts/bin/coreclr/Linux.x64.Checked/libclrjit*.so ${DEST}/crossgen2
 
 # Copy the bootstrapping .NET SDK, needed for 'dotnet build'
 # Exclude the pdbs as when they are present, when running on Linux we get:
 # Error: Image is either too small or contains an invalid byte offset or count.
 # System.BadImageFormatException: Image is either too small or contains an invalid byte offset or count.
 
-cd ${DIR}
-mv .dotnet/ ${CORE_ROOT}/
-cd ${CORE_ROOT}/..
+mv .dotnet/ ${DEST}/
+cd ${DEST}/..
 XZ_OPT=-2 tar Jcf ${OUTPUT} --exclude \*.pdb --transform "s,^./,./dotnet-${VERSION}/," -C Core_Root .
 
 if [[ -n "${S3OUTPUT}" ]]; then
