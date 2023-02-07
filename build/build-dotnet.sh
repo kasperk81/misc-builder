@@ -58,12 +58,12 @@ cd src/tests
 ./build.sh Release generatelayoutonly
 cd ../..
 
-# Write version info for .NET 6 (it doesn't have crossgen2 --version)
-echo "${VERSION:1}+${commit}" > ${CORE_ROOT}/version.txt
-
 # Copy Checked JITs to CORE_ROOT
 cp artifacts/bin/coreclr/Linux.x64.Checked/libclrjit*.so ${CORE_ROOT}
 cp artifacts/bin/coreclr/Linux.x64.Checked/libclrjit*.so ${CORE_ROOT}/crossgen2
+
+# Write version info for .NET 6 (it doesn't have crossgen2 --version)
+echo "${VERSION:1}+${commit}" > ${CORE_ROOT}/version.txt
 
 # Copy the bootstrapping .NET SDK, needed for 'dotnet build'
 # Exclude the pdbs as when they are present, when running on Linux we get:
